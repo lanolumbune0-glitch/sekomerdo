@@ -377,6 +377,7 @@ GameObject:
   - component: {fileID: 809594805}
   - component: {fileID: 809594804}
   - component: {fileID: 809594807}
+  - component: {fileID: 809594808}
   m_Layer: 0
   m_Name: Main Camera
   m_TagString: MainCamera
@@ -502,6 +503,21 @@ MonoBehaviour:
     m_VarianceClampScale: 0.9
     m_ContrastAdaptiveSharpening: 0
   m_Version: 2
+--- !u!114 &809594808
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 809594803}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 9489fc9fef56a5a47bb323d29a97a726, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::DoomCameraBob
+  bobFrequency: 10
+  bobHeight: 0.1
+  smoothReturn: 1
 --- !u!1 &1194195373
 GameObject:
   m_ObjectHideFlags: 0
@@ -1075,7 +1091,7 @@ Transform:
   m_GameObject: {fileID: 1947778569}
   serializedVersion: 2
   m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
-  m_LocalPosition: {x: -4.67, y: 2.1, z: 312.3}
+  m_LocalPosition: {x: -4.67, y: 2.1, z: 315.8}
   m_LocalScale: {x: 1.3718228, y: 4.7035, z: 113.19567}
   m_ConstrainProportionsScale: 0
   m_Children: []
