@@ -2,9 +2,8 @@ using UnityEngine;
 
 public class Target : MonoBehaviour
 {
-    public float health = 50f;
+    public float health = 50f; // Düşmanın canı
 
-    // Hasar alma fonksiyonu
     public void TakeDamage(float amount)
     {
         health -= amount;
@@ -16,7 +15,6 @@ public class Target : MonoBehaviour
 
     void Die()
     {
-        // Şimdilik objeyi yok edelim. İleride buraya patlama efekti ekleriz.
-        Destroy(gameObject);
+        Destroy(gameObject); // Düşmanı sahneden sil
     }
 }

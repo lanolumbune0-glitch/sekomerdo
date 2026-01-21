@@ -50,5 +50,17 @@ public class DoomGun : MonoBehaviour
                 Destroy(impactGO, 2f);
             }
         }
+        float noiseRadius = 30f; // Sesin duyulma mesafesi
+    Collider[] enemies = Physics.OverlapSphere(transform.position, noiseRadius);
+    
+    foreach (Collider col in enemies)
+    {
+        // Eğer menzildeki objede SmartEnemy scripti varsa "HearSound" fonksiyonunu çalıştır
+        SmartEnemy enemy = col.GetComponent<SmartEnemy>();
+        if (enemy != null)
+        {
+            enemy.HearSound(transform.position);
+        }
+    }
     }
 }
