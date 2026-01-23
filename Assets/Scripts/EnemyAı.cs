@@ -43,6 +43,7 @@ public class SmartEnemy : MonoBehaviour
     // Debug (Görselleştirme)
     private Vector3 debugTarget;
 
+private Vector3 impactVelocity = Vector3.zero; // Darbe kuvveti
     private void Awake()
     {
         agent = GetComponent<NavMeshAgent>();
@@ -54,6 +55,14 @@ public class SmartEnemy : MonoBehaviour
 
     private void Update()
     {
+        if (impactVelocity.magnitude > 0.2f)
+{
+    // NavMesh sınırları içinde kalarak düşmanı it
+    agent.Move(impactVelocity * Time.deltaTime);
+
+    // Kuvveti yavaşça azalt (Sürtünme etkisi)
+    impactVelocity = Vector3.Lerp(impactVelocity, Vector3.zero, 5f * Time.deltaTime);
+}
         if (player == null) return;
 
         // 1. GÖRÜŞ KONTROLÜ (Gerçekçi Görüş)
@@ -157,7 +166,17 @@ public class SmartEnemy : MonoBehaviour
         if (Physics.Raycast(walkPoint, -transform.up, 2f, whatIsGround))
             walkPointSet = true;
     }
+public void AddKnockback(Vector3 direction, float force)
+{
+    // Gelen yönü (Normalize et) ve güçle çarp
+    direction.Normalize();
 
+    // Yükseklik farkını yok say (Havaya uçmasın, sadece geriye gitsin)
+    if (direction.y < 0) direction.y = -direction.y; // Yere gömülmesin
+
+    // Kuvveti uygula (Mevcut itme varsa üstüne ekle)
+    impactVelocity += direction * force;
+}
     // --- ÖZELLİK: GERÇEKÇİ GÖRÜŞ (Duvar Arkasını Göremez) ---
     bool CanSeePlayer()
     {
@@ -182,10 +201,17 @@ public class SmartEnemy : MonoBehaviour
     // --- ÖZELLİK: SES DUYMA (Silah Scripti Çağıracak) ---
     public void HearSound(Vector3 soundPos)
     {
-        // Sesi duyunca oraya gitmek için walkPoint'i orası yapıyoruz
-        walkPoint = soundPos;
-        walkPointSet = true;
-        agent.SetDestination(soundPos);
+        // EMNİYET KİLİDİ:
+        // 1. Agent var mı?
+        // 2. Agent aktif mi?
+        // 3. Agent şu an NavMesh (yürünebilir zemin) üzerinde mi?
+        if (agent != null && agent.isActiveAndEnabled && agent.isOnNavMesh) 
+        {
+            // Sadece her şey yolundaysa komut ver
+            walkPoint = soundPos;
+            walkPointSet = true;
+            agent.SetDestination(soundPos);
+        }
     }
 
     // GÖRSEL AYIKLAMA

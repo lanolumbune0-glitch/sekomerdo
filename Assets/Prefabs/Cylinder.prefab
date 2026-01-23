@@ -17,7 +17,7 @@ GameObject:
   - component: {fileID: 6484217370862644210}
   m_Layer: 0
   m_Name: Cylinder
-  m_TagString: Untagged
+  m_TagString: Enemy
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
   m_StaticEditorFlags: 0
@@ -131,7 +131,10 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: df37ec60eadbd09499d2ccb37613ced5, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::Target
-  health: 50
+  health: 100
+  flashColor: {r: 1, g: 0, b: 0, a: 1}
+  flashDuration: 0.1
+  modelRenderer: {fileID: 3134481018686661108}
 --- !u!136 &3114680084129998619
 CapsuleCollider:
   m_ObjectHideFlags: 0
