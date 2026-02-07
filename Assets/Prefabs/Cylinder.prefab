@@ -10,8 +10,8 @@ GameObject:
   m_Component:
   - component: {fileID: 1619690947782288956}
   - component: {fileID: 3122018152458946724}
+  - component: {fileID: 9007658179692260995}
   - component: {fileID: 3134481018686661108}
-  - component: {fileID: 3240265548896298827}
   - component: {fileID: 1081634907567810402}
   - component: {fileID: 3114680084129998619}
   - component: {fileID: 6484217370862644210}
@@ -31,7 +31,7 @@ Transform:
   m_GameObject: {fileID: 6238381287525682082}
   serializedVersion: 2
   m_LocalRotation: {x: -0, y: -0, z: -0, w: 1}
-  m_LocalPosition: {x: -150.50015, y: -6.40929, z: 88.283936}
+  m_LocalPosition: {x: -406.70132, y: -0.23308, z: 1.56193}
   m_LocalScale: {x: 1, y: 1, z: 1}
   m_ConstrainProportionsScale: 0
   m_Children: []
@@ -45,6 +45,32 @@ MeshFilter:
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 6238381287525682082}
   m_Mesh: {fileID: 10206, guid: 0000000000000000e000000000000000, type: 0}
+--- !u!114 &9007658179692260995
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 6238381287525682082}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: f9f27bd19f07eec44b9055878ae2f0de, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::SmartEnemy
+  enemyType: 1
+  sightRange: 150
+  attackRange: 2.5
+  damage: 10
+  timeBetweenAttacks: 1.5
+  pinkyPredict: 1
+  blueRandomness: 5
+  whatIsGround:
+    serializedVersion: 2
+    m_Bits: 128
+  whatIsPlayer:
+    serializedVersion: 2
+    m_Bits: 64
+  knockbackMultiplier: 0.819
 --- !u!23 &3134481018686661108
 MeshRenderer:
   m_ObjectHideFlags: 0
@@ -94,31 +120,6 @@ MeshRenderer:
   m_SortingOrder: 0
   m_MaskInteraction: 0
   m_AdditionalVertexStreams: {fileID: 0}
---- !u!114 &3240265548896298827
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 6238381287525682082}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: 87507718e5838bd48a12b5d5d27022ba, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: Assembly-CSharp::EnemyAI
-  enemyType: 0
-  sightRange: 60
-  attackRange: 2.5
-  damage: 10
-  timeBetweenAttacks: 1.5
-  pinkyPredict: 5
-  blueRandomness: 8
-  whatIsGround:
-    serializedVersion: 2
-    m_Bits: 128
-  whatIsPlayer:
-    serializedVersion: 2
-    m_Bits: 64
 --- !u!114 &1081634907567810402
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -132,6 +133,9 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::Target
   health: 100
+  isInvincible: 0
+  stunDuration: 5
+  stunColor: {r: 0, g: 0, b: 1, a: 1}
   flashColor: {r: 1, g: 0, b: 0, a: 1}
   flashDuration: 0.1
   modelRenderer: {fileID: 3134481018686661108}

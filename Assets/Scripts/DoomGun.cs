@@ -1,35 +1,40 @@
 using UnityEngine;
-using System.Collections; // Coroutine (Zamanlayıcı) için gerekli
+using System.Collections;
 
 public class DoomGun : MonoBehaviour
 {
+    [Header("Ses Efektleri & Mikser")]
+    public AudioSource audioSource;
+    public AudioClip shootSound;
+    [Range(0f, 1f)] public float shootVolume = 1f; 
+    public AudioClip shellInsertSound;
+    [Range(0f, 1f)] public float reloadVolume = 0.8f; 
+
     [Header("Pompalı Şarjör Sistemi")]
-    public int maxAmmo = 8;          // Toplam kapasite
-    public float shellInsertTime = 0.5f; // Mermi başına doldurma süresi
+    public int maxAmmo = 8;
+    public float shellInsertTime = 0.5f;
     private int currentAmmo;         
     private bool isReloading = false;
     private Coroutine reloadCoroutine;
 
-    [Header("Animasyon (Tepme)")]
-    public WeaponMovement recoilScript; // SİLAH OBJENİ BURAYA SÜRÜKLE!
+    [Header("Animasyon & Fizik")]
+    public WeaponMovement weaponMovement; // İSİM DEĞİŞİKLİĞİ: Daha genel bir isim verdik
 
-    [Header("Shotgun Atış Ayarları")]
-    public int pellets = 10;        // Kaç saçma çıksın?
-    public float spreadAngle = 5f;  // Dağılma açısı
-    public float fireRate = 1f;     // Ateş hızı
-    
-    [Header("Güç ve Mesafe")]
+    [Header("Shotgun Ayarları")]
+    public int pellets = 10;
+    public float spreadAngle = 5f;
+    public float fireRate = 1f;
     public float range = 50f;
-    public float closeDamage = 10f; // Yakın hasar
-    public float farDamage = 2f;    // Uzak hasar
-    public float closeKnockback = 50f; // Yakın itme
-    public float farKnockback = 5f;    // Uzak itme
+    public float closeDamage = 10f;
+    public float farDamage = 2f;
+    public float closeKnockback = 50f;
+    public float farKnockback = 5f;
 
     [Header("Görsel Efektler")]
-    public Transform attackPoint;      // Namlu ucu (Boş obje)
-    public GameObject bulletTrailPrefab; // Mermi izi prefabı
-    public ParticleSystem muzzleFlash;   // Ateş efekti
-    public GameObject impactEffect;      // Vuruş efekti (Kan/Duvar izi)
+    public Transform attackPoint;
+    public GameObject bulletTrailPrefab;
+    public ParticleSystem muzzleFlash;
+    public GameObject impactEffect;
 
     [Header("Referanslar")]
     public Camera fpsCamera;
@@ -40,41 +45,38 @@ public class DoomGun : MonoBehaviour
     void Start()
     {
         currentAmmo = maxAmmo;
+        if (audioSource == null) audioSource = gameObject.AddComponent<AudioSource>();
     }
 
     void OnEnable()
     {
         isReloading = false;
+        // Eğer silah değiştirilirse animasyon takılı kalmasın
+        if (weaponMovement != null) weaponMovement.SetReloading(false);
     }
 
     void Update()
     {
-        // 1. ATEŞ ETME KONTROLÜ
         if (Input.GetButton("Fire1") && Time.time >= nextTimeToFire)
         {
             if (currentAmmo > 0)
             {
-                // Doldururken ateş edersek doldurmayı kes
                 if (isReloading) StopReload();
-                
                 nextTimeToFire = Time.time + 1f / fireRate;
                 ShootShotgun();
             }
             else if (!isReloading)
             {
-                // Mermi yoksa otomatik doldur
                 StartReload();
             }
         }
 
-        // 2. MANUEL RELOAD (R TUŞU)
         if (Input.GetKeyDown(KeyCode.R) && currentAmmo < maxAmmo && !isReloading)
         {
             StartReload();
         }
     }
 
-    // --- YENİLEME FONKSİYONLARI ---
     void StartReload()
     {
         if (!isReloading) reloadCoroutine = StartCoroutine(ReloadSequence());
@@ -84,68 +86,78 @@ public class DoomGun : MonoBehaviour
     {
         if (reloadCoroutine != null) StopCoroutine(reloadCoroutine);
         isReloading = false;
+        
+        // ANİMASYONU DURDUR
+        if (weaponMovement != null) weaponMovement.SetReloading(false);
     }
 
     IEnumerator ReloadSequence()
     {
         isReloading = true;
-        // Şarjör dolana kadar tek tek mermi ekle
+        
+        // 1. ANİMASYONU BAŞLAT (Silahı aşağı indir)
+        if (weaponMovement != null) weaponMovement.SetReloading(true);
+
         while (currentAmmo < maxAmmo)
         {
             yield return new WaitForSeconds(shellInsertTime);
             currentAmmo++;
+
+            // SES
+            if (shellInsertSound != null && audioSource != null)
+            {
+                audioSource.pitch = Random.Range(0.95f, 1.05f);
+                audioSource.PlayOneShot(shellInsertSound, reloadVolume);
+            }
+
+            // 2. MERMİ GİRME EFEKTİ (Silahı hafif zıplat)
+            if (weaponMovement != null) weaponMovement.ReloadBump();
         }
+
         isReloading = false;
+        
+        // 3. ANİMASYONU BİTİR (Silahı kaldır)
+        if (weaponMovement != null) weaponMovement.SetReloading(false);
     }
 
-    // --- ASIL ATEŞ ETME FONKSİYONU ---
     void ShootShotgun()
     {
-        // Mermiyi azalt
         currentAmmo--;
 
-        // SİLAH TEPME (RECOIL) EFEKTİ
-        if (recoilScript != null)
+        if (shootSound != null && audioSource != null)
         {
-            recoilScript.RecoilFire();
+            audioSource.pitch = Random.Range(0.9f, 1.1f);
+            audioSource.PlayOneShot(shootSound, shootVolume);
         }
 
-        // Namlu ateşi
+        // TEPME EFEKTİ
+        if (weaponMovement != null) weaponMovement.RecoilFire();
         if (muzzleFlash != null) muzzleFlash.Play();
 
-        // Başlangıç noktaları
-        Vector3 eyePosition = fpsCamera.transform.position; // Hesaplama gözden
-        Vector3 visualStartPoint = (attackPoint != null) ? attackPoint.position : eyePosition; // İz namludan
+        Vector3 eyePosition = fpsCamera.transform.position;
+        Vector3 visualStartPoint = (attackPoint != null) ? attackPoint.position : eyePosition;
 
-        // Saçma döngüsü
         for (int i = 0; i < pellets; i++)
         {
-            // Dağılma (Spread) hesabı
             Vector3 deviation = Random.insideUnitCircle * spreadAngle;
             Quaternion rot = Quaternion.LookRotation(fpsCamera.transform.forward);
             Vector3 shotDirection = rot * Quaternion.Euler(deviation.x, deviation.y, 0) * Vector3.forward;
-
             Vector3 endPoint = eyePosition + (shotDirection * range);
 
             RaycastHit hit;
             if (Physics.Raycast(eyePosition, shotDirection, out hit, range, vurulabilirKatmanlar))
             {
                 endPoint = hit.point;
-
-                // Hasar ve İtme hesapları (Mesafeye göre)
                 float distanceRatio = hit.distance / range;
                 float currentDamage = Mathf.Lerp(closeDamage, farDamage, distanceRatio);
                 float currentForce = Mathf.Lerp(closeKnockback, farKnockback, distanceRatio);
 
-                // Hasar ver
                 Target target = hit.transform.GetComponent<Target>();
                 if (target != null) target.TakeDamage(currentDamage);
 
-                // Düşmanı it
                 SmartEnemy enemyAI = hit.transform.GetComponent<SmartEnemy>();
                 if (enemyAI != null) enemyAI.AddKnockback(shotDirection, currentForce);
 
-                // Vuruş efekti
                 if (impactEffect != null)
                 {
                     GameObject impactGO = Instantiate(impactEffect, hit.point, Quaternion.LookRotation(hit.normal));
@@ -153,14 +165,13 @@ public class DoomGun : MonoBehaviour
                 }
             }
 
-            // Mermi İzi Çizimi
             if (bulletTrailPrefab != null)
             {
                 GameObject trail = Instantiate(bulletTrailPrefab);
                 LineRenderer lr = trail.GetComponent<LineRenderer>();
                 if (lr != null)
                 {
-                    lr.SetPosition(0, visualStartPoint);
+                    lr.SetPosition(0, visualStartPoint); 
                     lr.SetPosition(1, endPoint);
                 }
             }

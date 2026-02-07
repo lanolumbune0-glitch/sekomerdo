@@ -4,9 +4,9 @@ using UnityEngine.AI;
 // Düşman Kişilikleri
 public enum EnemyType 
 { 
-    Red_Blinky,   // Dümdüz üstüne koşar (Agresif)
-    Pink_Pinky,   // Önünü kesmeye çalışır (Zeki)
-    Blue_Inky     // Etrafında dolanır, şaşırtır (Rastgele)
+    Red_Blinky,   // Dümdüz üstüne koşar (Agresif - Zombi gibi)
+    Pink_Pinky,   // Önünü kesmeye çalışır (Zeki - Taktiksel)
+    Blue_Inky     // Etrafında dolanır, şaşırtır (Rastgele - Kaotik)
 }
 
 public class SmartEnemy : MonoBehaviour
@@ -22,7 +22,7 @@ public class SmartEnemy : MonoBehaviour
 
     [Header("Kişilik Ayarları")]
     public float pinkyPredict = 5f;       // Pembe ne kadar öne kırsın?
-    public float blueRandomness = 8f;     // Mavi oyuncunun ne kadar uzağına gitsin?
+    public float blueRandomness = 8f;     // Mavi ne kadar sapıtsın?
 
     [Header("Referanslar")]
     public LayerMask whatIsGround;
@@ -31,92 +31,94 @@ public class SmartEnemy : MonoBehaviour
     // Sistem Değişkenleri
     private NavMeshAgent agent;
     private Transform player;
-    private PlayerHealth playerHealth;
+    private Target myStats; // Kendi can scriptimiz (Ölümsüzlük kontrolü için)
+
+    // Fizik ve Durum Değişkenleri
+    private Vector3 impactVelocity = Vector3.zero; // Geri tepme kuvveti
+    private bool isStunned = false; // Sersemledi mi?
     
-    // Durumlar
+    // AI Durumları
     private bool playerInSight;
     private bool playerInAttackRange;
     private bool alreadyAttacked;
     private Vector3 walkPoint;
     private bool walkPointSet;
-    
-    // Debug (Görselleştirme)
-    private Vector3 debugTarget;
 
-private Vector3 impactVelocity = Vector3.zero; // Darbe kuvveti
+    [Header("Fizik Ayarları")]
+    [Range(0f, 1f)] public float knockbackMultiplier = 1f;
     private void Awake()
     {
         agent = GetComponent<NavMeshAgent>();
         player = GameObject.Find("Player").transform;
-        
-        // PlayerHealth scripti varsa al, yoksa hata verme
-        if(player != null) playerHealth = player.GetComponent<PlayerHealth>();
+        myStats = GetComponent<Target>(); // Kendi üzerindeki Target scriptini al
     }
 
     private void Update()
     {
-        if (impactVelocity.magnitude > 0.2f)
-{
-    // NavMesh sınırları içinde kalarak düşmanı it
-    agent.Move(impactVelocity * Time.deltaTime);
+        // 1. ÖNCELİK: SERSEMLEME KONTROLÜ
+        // Eğer sersemlediyse (Nemesis modu) hiçbir şey yapma
+        if (isStunned) return;
 
-    // Kuvveti yavaşça azalt (Sürtünme etkisi)
-    impactVelocity = Vector3.Lerp(impactVelocity, Vector3.zero, 5f * Time.deltaTime);
-}
+        // 2. ÖNCELİK: GERİ TEPME FİZİĞİ (KNOCKBACK)
+        // Eğer bir darbe aldıysa geriye doğru kay
+        if (impactVelocity.magnitude > 0.2f)
+        {
+            agent.Move(impactVelocity * Time.deltaTime);
+            // Sürtünme etkisiyle yavaşla
+            impactVelocity = Vector3.Lerp(impactVelocity, Vector3.zero, 5f * Time.deltaTime);
+        }
+
         if (player == null) return;
 
-        // 1. GÖRÜŞ KONTROLÜ (Gerçekçi Görüş)
+        // 3. GÖRÜŞ KONTROLÜ
+        // Oyuncuyu görüyor muyum? (Menzil + Duvar Arkası Kontrolü)
         playerInSight = CanSeePlayer();
+        // Saldırı mesafesinde miyim?
         playerInAttackRange = Physics.CheckSphere(transform.position, attackRange, whatIsPlayer);
 
-        // 2. DURUM MAKİNESİ (State Machine)
+        // 4. DURUM MAKİNESİ (State Machine)
         if (playerInSight && playerInAttackRange)
         {
-            Attacking(); // Hem görüyor hem yakında -> SALDIR
+            Attacking(); // Görüyor + Yakın = SALDIR
         }
         else if (playerInSight)
         {
-            Chasing();   // Görüyor ama uzakta -> KOVALA
+            Chasing();   // Görüyor + Uzak = KOVALA (Kişiliğe göre)
         }
         else
         {
-            Patroling(); // Görmüyor -> DEVRİYE AT
+            Patroling(); // Görmüyor = DEVRİYE
         }
     }
 
-    // --- DURUM 1: KOVALAMA (Kişiliğe Göre Değişir) ---
+    // --- DURUM 1: KOVALAMA (Kişiliğe Göre) ---
     private void Chasing()
     {
         switch (enemyType)
         {
             case EnemyType.Red_Blinky:
-                // Zombi modu: Direkt oyuncunun olduğu yere git
+                // Zombi modu: Direkt oyuncuya koş
                 agent.SetDestination(player.position);
-                debugTarget = player.position;
                 break;
 
             case EnemyType.Pink_Pinky:
-                // Zeki mod: Oyuncunun gittiği yönün önüne kır (Interception)
+                // Zeki mod: Oyuncunun gittiği yönün önüne kır
                 Vector3 interceptPoint = player.position + (player.forward * pinkyPredict);
                 NavMeshHit hit;
-                // Eğer tahmin edilen nokta duvar içindeyse normal kovalamaya dön
+                // Eğer tahmin edilen nokta duvarın içindeyse normale dön
                 if (NavMesh.SamplePosition(interceptPoint, out hit, 5f, NavMesh.AllAreas))
                     agent.SetDestination(hit.position);
                 else
                     agent.SetDestination(player.position);
-                
-                debugTarget = interceptPoint;
                 break;
 
             case EnemyType.Blue_Inky:
-                // Kaotik mod: Oyuncunun tam üstüne değil, etrafındaki rastgele bir noktaya git
-                // Bu sayede seni sıkıştırabilir veya arkana dolanabilir
+                // Kaotik mod: Oyuncunun etrafında rastgele dolan
                 if (!agent.pathPending && agent.remainingDistance < 2f)
                 {
                     Vector3 randomPoint = Random.insideUnitSphere * blueRandomness;
                     agent.SetDestination(player.position + randomPoint);
                 }
-                debugTarget = agent.destination;
                 break;
         }
     }
@@ -131,8 +133,8 @@ private Vector3 impactVelocity = Vector3.zero; // Darbe kuvveti
         {
             Debug.Log(enemyType + " sana vurdu!");
             
-            // Can azaltma
-            if (playerHealth != null) playerHealth.TakeDamage(damage);
+            // Buraya oyuncunun canını azaltma kodu gelecek
+            // Örn: player.GetComponent<PlayerHealth>().TakeDamage(damage);
 
             alreadyAttacked = true;
             Invoke(nameof(ResetAttack), timeBetweenAttacks);
@@ -150,7 +152,6 @@ private Vector3 impactVelocity = Vector3.zero; // Darbe kuvveti
         if (!walkPointSet) SearchWalkPoint();
         if (walkPointSet) agent.SetDestination(walkPoint);
 
-        // Hedefe vardık mı?
         if (Vector3.Distance(transform.position, walkPoint) < 1f)
             walkPointSet = false;
     }
@@ -166,18 +167,47 @@ private Vector3 impactVelocity = Vector3.zero; // Darbe kuvveti
         if (Physics.Raycast(walkPoint, -transform.up, 2f, whatIsGround))
             walkPointSet = true;
     }
-public void AddKnockback(Vector3 direction, float force)
-{
-    // Gelen yönü (Normalize et) ve güçle çarp
-    direction.Normalize();
 
-    // Yükseklik farkını yok say (Havaya uçmasın, sadece geriye gitsin)
-    if (direction.y < 0) direction.y = -direction.y; // Yere gömülmesin
+    // --- ÖZEL YETENEK 1: GERİ TEPME (KNOCKBACK) ---
+    public void AddKnockback(Vector3 direction, float force)
+    {
+        direction.Normalize();
+        if (direction.y < 0) direction.y = -direction.y; 
 
-    // Kuvveti uygula (Mevcut itme varsa üstüne ekle)
-    impactVelocity += direction * force;
-}
-    // --- ÖZELLİK: GERÇEKÇİ GÖRÜŞ (Duvar Arkasını Göremez) ---
+        // İŞTE SİHİR BURADA:
+        // Gelen gücü, düşmanın kendi direnciyle çarpıyoruz.
+        // Eğer multiplier 0.1 ise, gücün %90'ı yok olur.
+        impactVelocity += direction * (force * knockbackMultiplier);
+    }
+
+    // --- ÖZEL YETENEK 2: SERSEMLEME (NEMESIS MODU) ---
+    public void SetStunnedState(bool state)
+    {
+        isStunned = state;
+
+        if (isStunned)
+        {
+            agent.isStopped = true;       // Yürümeyi durdur
+            agent.velocity = Vector3.zero; // Kaymayı durdur
+        }
+        else
+        {
+            if(agent.isActiveAndEnabled) agent.isStopped = false; // Devam et
+        }
+    }
+
+    // --- ÖZEL YETENEK 3: SES DUYMA ---
+    public void HearSound(Vector3 soundPos)
+    {
+        if (agent != null && agent.isActiveAndEnabled && agent.isOnNavMesh && !isStunned) 
+        {
+            walkPoint = soundPos;
+            walkPointSet = true;
+            agent.SetDestination(soundPos);
+        }
+    }
+
+    // --- GÖRÜŞ SİSTEMİ (Gerçekçi - Duvar Arkası Görmez) ---
     bool CanSeePlayer()
     {
         if (Vector3.Distance(transform.position, player.position) < sightRange)
@@ -185,11 +215,10 @@ public void AddKnockback(Vector3 direction, float force)
             Vector3 dirToPlayer = (player.position - transform.position).normalized;
             if (Vector3.Angle(transform.forward, dirToPlayer) < 110f) // 110 derece görüş açısı
             {
-                // Kendi vücuduna çarpmasın diye layer mask
-                int layerMask = ~LayerMask.GetMask("Enemy"); 
-                
+                // Raycast atarken "Enemy" layerını görmezden gel ki kendine çarpmasın
+                // (LayerMask ayarlarını Unity'den yapman gerekebilir)
                 RaycastHit hit;
-                if (Physics.Raycast(transform.position, dirToPlayer, out hit, sightRange, layerMask))
+                if (Physics.Raycast(transform.position, dirToPlayer, out hit, sightRange))
                 {
                     if (hit.transform == player) return true;
                 }
@@ -198,30 +227,9 @@ public void AddKnockback(Vector3 direction, float force)
         return false;
     }
 
-    // --- ÖZELLİK: SES DUYMA (Silah Scripti Çağıracak) ---
-    public void HearSound(Vector3 soundPos)
+    // EDİTÖRDE GÖRMEK İÇİN
+    private void OnDrawGizmosSelected()
     {
-        // EMNİYET KİLİDİ:
-        // 1. Agent var mı?
-        // 2. Agent aktif mi?
-        // 3. Agent şu an NavMesh (yürünebilir zemin) üzerinde mi?
-        if (agent != null && agent.isActiveAndEnabled && agent.isOnNavMesh) 
-        {
-            // Sadece her şey yolundaysa komut ver
-            walkPoint = soundPos;
-            walkPointSet = true;
-            agent.SetDestination(soundPos);
-        }
-    }
-
-    // GÖRSEL AYIKLAMA
-    private void OnDrawGizmos()
-    {
-        // Hedefi göster (Mavi Top)
-        Gizmos.color = Color.blue;
-        Gizmos.DrawWireSphere(debugTarget, 0.5f);
-        
-        // Menzilleri göster
         Gizmos.color = Color.yellow;
         Gizmos.DrawWireSphere(transform.position, sightRange);
         Gizmos.color = Color.red;
