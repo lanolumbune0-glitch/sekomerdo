@@ -1,14 +1,27 @@
 using UnityEngine;
+using UnityEngine.UI; 
 using System.Collections;
 
 public class DoomGun : MonoBehaviour
 {
+    [Header("UI Bağlantıları")]
+    public Text ammoText;        
+    public CrosshairHUD crosshairScript; 
+
     [Header("Ses Efektleri & Mikser")]
     public AudioSource audioSource;
+    
+    [Header("Ateş & Reload Sesleri")]
     public AudioClip shootSound;
     [Range(0f, 1f)] public float shootVolume = 1f; 
-    public AudioClip shellInsertSound;
+    
+    public AudioClip shellInsertSound; // Mermi tek tek girme sesi
     [Range(0f, 1f)] public float reloadVolume = 0.8f; 
+
+    [Header("Pompa (Kurma) Sesi - YENİ")]
+    public AudioClip pumpSound;      // "Şak-Şak" sesi (Pump Action)
+    [Range(0f, 1f)] public float pumpVolume = 1f;
+    public float pumpDelay = 0.5f;   // Ateş ettikten kaç sn sonra sesi çalsın?
 
     [Header("Pompalı Şarjör Sistemi")]
     public int maxAmmo = 8;
@@ -18,7 +31,7 @@ public class DoomGun : MonoBehaviour
     private Coroutine reloadCoroutine;
 
     [Header("Animasyon & Fizik")]
-    public WeaponMovement weaponMovement; // İSİM DEĞİŞİKLİĞİ: Daha genel bir isim verdik
+    public WeaponMovement weaponMovement;
 
     [Header("Shotgun Ayarları")]
     public int pellets = 10;
@@ -46,13 +59,17 @@ public class DoomGun : MonoBehaviour
     {
         currentAmmo = maxAmmo;
         if (audioSource == null) audioSource = gameObject.AddComponent<AudioSource>();
+        
+        UpdateAmmoUI(); 
+        if (crosshairScript != null) crosshairScript.HideReloadRing();
     }
 
     void OnEnable()
     {
         isReloading = false;
-        // Eğer silah değiştirilirse animasyon takılı kalmasın
         if (weaponMovement != null) weaponMovement.SetReloading(false);
+        if (crosshairScript != null) crosshairScript.HideReloadRing();
+        UpdateAmmoUI();
     }
 
     void Update()
@@ -61,7 +78,9 @@ public class DoomGun : MonoBehaviour
         {
             if (currentAmmo > 0)
             {
+                // Eğer reload yaparken ateş edersek durdur
                 if (isReloading) StopReload();
+                
                 nextTimeToFire = Time.time + 1f / fireRate;
                 ShootShotgun();
             }
@@ -77,6 +96,14 @@ public class DoomGun : MonoBehaviour
         }
     }
 
+    void UpdateAmmoUI()
+    {
+        if (ammoText != null)
+        {
+            ammoText.text = currentAmmo + " / " + maxAmmo;
+        }
+    }
+
     void StartReload()
     {
         if (!isReloading) reloadCoroutine = StartCoroutine(ReloadSequence());
@@ -86,51 +113,69 @@ public class DoomGun : MonoBehaviour
     {
         if (reloadCoroutine != null) StopCoroutine(reloadCoroutine);
         isReloading = false;
-        
-        // ANİMASYONU DURDUR
         if (weaponMovement != null) weaponMovement.SetReloading(false);
+        if (crosshairScript != null) crosshairScript.HideReloadRing();
+        UpdateAmmoUI();
+        
+        // Reload yarıda kesilirse pompa sesini iptal et (İsteğe bağlı)
+        // CancelInvoke(nameof(PlayPumpSound)); 
     }
 
     IEnumerator ReloadSequence()
     {
         isReloading = true;
-        
-        // 1. ANİMASYONU BAŞLAT (Silahı aşağı indir)
         if (weaponMovement != null) weaponMovement.SetReloading(true);
 
         while (currentAmmo < maxAmmo)
         {
-            yield return new WaitForSeconds(shellInsertTime);
-            currentAmmo++;
+            float timer = 0f;
+            while (timer < shellInsertTime)
+            {
+                timer += Time.deltaTime;
+                float progress = timer / shellInsertTime;
+                if (crosshairScript != null) crosshairScript.UpdateReloadProgress(progress);
+                yield return null;
+            }
 
-            // SES
+            currentAmmo++;
+            UpdateAmmoUI(); 
+
             if (shellInsertSound != null && audioSource != null)
             {
                 audioSource.pitch = Random.Range(0.95f, 1.05f);
                 audioSource.PlayOneShot(shellInsertSound, reloadVolume);
             }
 
-            // 2. MERMİ GİRME EFEKTİ (Silahı hafif zıplat)
             if (weaponMovement != null) weaponMovement.ReloadBump();
         }
 
+        // --- YENİ KISIM: RELOAD TAMAMLANIRSA POMPA SESİ ---
+        // Buraya geldiysek reload hiç kesilmemiş demektir.
+        PlayPumpSound();
+        // --------------------------------------------------
+
         isReloading = false;
-        
-        // 3. ANİMASYONU BİTİR (Silahı kaldır)
         if (weaponMovement != null) weaponMovement.SetReloading(false);
+        if (crosshairScript != null) crosshairScript.HideReloadRing();
     }
 
     void ShootShotgun()
     {
         currentAmmo--;
+        UpdateAmmoUI(); 
 
+        // Ateş Sesi
         if (shootSound != null && audioSource != null)
         {
             audioSource.pitch = Random.Range(0.9f, 1.1f);
             audioSource.PlayOneShot(shootSound, shootVolume);
         }
 
-        // TEPME EFEKTİ
+        // --- YENİ KISIM: ATEŞ SONRASI POMPA SESİ ---
+        // Belirlenen süre (pumpDelay) kadar bekle ve sesi çal
+        Invoke(nameof(PlayPumpSound), pumpDelay);
+        // -------------------------------------------
+
         if (weaponMovement != null) weaponMovement.RecoilFire();
         if (muzzleFlash != null) muzzleFlash.Play();
 
@@ -175,6 +220,19 @@ public class DoomGun : MonoBehaviour
                     lr.SetPosition(1, endPoint);
                 }
             }
+        }
+    }
+
+    // --- YENİ FONKSİYON: POMPA SESİNİ ÇAL ---
+    void PlayPumpSound()
+    {
+        if (pumpSound != null && audioSource != null)
+        {
+            audioSource.pitch = Random.Range(0.95f, 1.05f); // Robotik olmasın diye hafif ton değişimi
+            audioSource.PlayOneShot(pumpSound, pumpVolume);
+            
+            // İstersen burada silahı tekrar hafifçe zıplatabilirsin:
+            if (weaponMovement != null) weaponMovement.ReloadBump(); 
         }
     }
 }
