@@ -19,12 +19,16 @@ public class Target : MonoBehaviour
 
     private Color originalColor;
     private bool isFlashing = false;
-    private bool isStunned = false; // Şu an baygın mı?
+    
+    // YENİ: Bu değişkeni public yapalım ki Inspector'dan takılı kalıp kalmadığını görebil
+    [Header("Durum (Debug)")]
+    public bool isStunned = false; 
 
     void Start()
     {
-        maxHealth = health; // Başlangıç canını hafızaya al
+        maxHealth = health;
 
+        // Renderer'ı otomatik bul
         if (modelRenderer == null)
         {
             modelRenderer = GetComponent<Renderer>();
@@ -36,62 +40,73 @@ public class Target : MonoBehaviour
 
     public void TakeDamage(float amount)
     {
-        // Eğer zaten baygınsa hasar almasın (Veya istersen alsın ama süresi uzasın)
+        // 1. KORUMA: Eğer zaten sersemlemişse hasar alma!
         if (isStunned) return;
 
         health -= amount;
 
-        // --- FLASH EFEKTİ ---
+        // Flash efekti
         if (modelRenderer != null && !isFlashing) StartCoroutine(FlashRoutine());
 
-        // --- ÖLÜM VEYA BAYILMA KONTROLÜ ---
+        // Ölüm veya Bayılma Kontrolü
         if (health <= 0f)
         {
             if (isInvincible)
             {
-                StartCoroutine(StunRoutine()); // Ölümsüzse bayılt
+                // ÇİFTE KORUMA: Zaten bayılma süreci başlamışsa tekrar başlatma
+                if (!isStunned) StartCoroutine(StunRoutine());
             }
             else
             {
-                Die(); // Normal düşmansa öldür
+                Die();
             }
         }
     }
 
-    // --- SERSEMLEME (STUN) DÖNGÜSÜ ---
     IEnumerator StunRoutine()
     {
-        isStunned = true;
-        
+        isStunned = true; // Bayılma modu AÇIK
+        health = 0; // Canı 0'da sabitle
+
         // 1. Yapay Zekayı Durdur
         SmartEnemy ai = GetComponent<SmartEnemy>();
         if (ai != null) ai.SetStunnedState(true);
 
-        // 2. Rengi Değiştir (Görsel Geri Bildirim)
+        // 2. Rengi Değiştir
         if (modelRenderer != null) modelRenderer.material.color = stunColor;
 
-        Debug.Log("Düşman Sersemledi! Kaçmak için " + stunDuration + " saniyen var!");
+        Debug.Log("NEMESIS BAYILDI! " + stunDuration + " saniye bekliyor...");
 
-        // 3. Bekle
+        // 3. Bekle (Bu sırada hasar alamaz)
         yield return new WaitForSeconds(stunDuration);
 
-        // 4. Canını Fullee ve Uyandır
-        health = maxHealth;
-        isStunned = false;
+        // --- UYANIŞ ---
 
+        // 4. Canı Fullee
+        health = maxHealth;
+
+        // 5. Rengi Düzelt
         if (modelRenderer != null) modelRenderer.material.color = originalColor;
         
+        // 6. Yapay Zekayı Başlat
         if (ai != null) ai.SetStunnedState(false);
+
+        // 7. EN ÖNEMLİSİ: Bayılma modunu KAPAT
+        isStunned = false;
+        
+        Debug.Log("NEMESIS UYANDI!");
     }
 
     IEnumerator FlashRoutine()
     {
         isFlashing = true;
-        if (modelRenderer != null) modelRenderer.material.color = flashColor;
+        // Eğer o sırada baygın değilse kırmızı yap (Baygınsa mavi kalsın)
+        if (modelRenderer != null && !isStunned) modelRenderer.material.color = flashColor;
+        
         yield return new WaitForSeconds(flashDuration);
         
-        // Eğer o sırada sersemlediyse (rengi mavi olduysa), orijinal renge dönme!
-        if (!isStunned && modelRenderer != null) 
+        // Sadece baygın DEĞİLSE eski rengine dön
+        if (modelRenderer != null && !isStunned) 
             modelRenderer.material.color = originalColor;
             
         isFlashing = false;
@@ -100,5 +115,12 @@ public class Target : MonoBehaviour
     void Die()
     {
         Destroy(gameObject);
+    }
+    
+    // Eğer obje kapanıp açılırsa bug'a girmemesi için resetle
+    void OnDisable()
+    {
+        isStunned = false;
+        isFlashing = false;
     }
 }

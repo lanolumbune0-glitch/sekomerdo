@@ -2,6 +2,14 @@ using UnityEngine;
 
 public class WeaponMovement : MonoBehaviour
 {
+    [Header("Nişan Alma (ADS) Ayarları - YENİ")]
+    public Vector3 aimPosition;      // Nişan alırken silah nerede dursun?
+    public float adsSpeed = 8f;      // Nişan alma hızı
+    public Camera mainCamera;        // Zoom için kamera
+    public float defaultFov = 60f;   // Normal görüş açısı
+    public float adsFov = 40f;       // Nişan alınca görüş açısı (Daha düşük = Daha zoom)
+    private bool isAiming = false;
+
     [Header("Sallanma (Sway)")]
     public float swayAmount = 0.02f;
     public float maxSwayAmount = 0.06f;
@@ -14,14 +22,14 @@ public class WeaponMovement : MonoBehaviour
     public float snapiness = 6f;     
     public float returnSpeed = 2f;   
 
-    [Header("Reload Animasyonu (YENİ)")]
-    public Vector3 reloadPosOffset = new Vector3(0, -0.2f, 0); // Reload yaparken silah ne kadar aşağı insin?
-    public Vector3 reloadRotOffset = new Vector3(30f, 0, -10f); // Reload yaparken silah nasıl dönsün? (Eğilme)
-    public float reloadSmooth = 3f; // Pozisyona geçiş hızı
+    [Header("Reload Animasyonu")]
+    public Vector3 reloadPosOffset = new Vector3(0, -0.2f, 0); 
+    public Vector3 reloadRotOffset = new Vector3(30f, 0, -10f); 
+    public float reloadSmooth = 3f; 
     private bool isReloading = false;
 
     // Private Değişkenler
-    private Vector3 initialPosition;
+    private Vector3 initialPosition; // Kalça hizası (Hip Fire)
     private Quaternion initialRotation;
     
     private Vector3 currentRecoilPos;
@@ -33,25 +41,46 @@ public class WeaponMovement : MonoBehaviour
     {
         initialPosition = transform.localPosition;
         initialRotation = transform.localRotation;
+        
+        // Eğer kamera atanmamışsa otomatik bul
+        if (mainCamera == null) mainCamera = Camera.main;
+        if (mainCamera != null) defaultFov = mainCamera.fieldOfView;
     }
 
     void Update()
     {
+        HandleInput();  // Sağ tık kontrolü
         HandleSway();
         HandleRecoil();
-        HandleReloadState(); // YENİ: Reload pozisyonunu kontrol et
+        HandlePositionAndRotation(); // Tüm hareketleri birleştir
+    }
+
+    void HandleInput()
+    {
+        // Sağ tık basılıysa VE reload yapmıyorsak nişan al
+        if (Input.GetButton("Fire2") && !isReloading)
+        {
+            isAiming = true;
+        }
+        else
+        {
+            isAiming = false;
+        }
     }
 
     void HandleSway()
     {
-        float movementX = -Input.GetAxis("Mouse X") * swayAmount;
-        float movementY = -Input.GetAxis("Mouse Y") * swayAmount;
-        movementX = Mathf.Clamp(movementX, -maxSwayAmount, maxSwayAmount);
-        movementY = Mathf.Clamp(movementY, -maxSwayAmount, maxSwayAmount);
+        // Nişan alırken sallanma daha az olsun (Daha stabil atış)
+        float currentSwayAmount = isAiming ? swayAmount * 0.2f : swayAmount;
+        float currentMaxSway = isAiming ? maxSwayAmount * 0.2f : maxSwayAmount;
 
-        Vector3 finalPosition = new Vector3(movementX, movementY, 0);
+        float movementX = -Input.GetAxis("Mouse X") * currentSwayAmount;
+        float movementY = -Input.GetAxis("Mouse Y") * currentSwayAmount;
+        movementX = Mathf.Clamp(movementX, -currentMaxSway, currentMaxSway);
+        movementY = Mathf.Clamp(movementY, -currentMaxSway, currentMaxSway);
 
-        // Sway hareketini mevcut pozisyona ekle (Reload pozisyonu hesaplandıktan sonra üzerine biner)
+        // Sway hesabı burada yapılır ama uygulaması HandlePositionAndRotation'da olur
+        // Basitlik için burada direkt localPosition'a eklemiyoruz, aşağıda target ile birleştireceğiz.
     }
 
     void HandleRecoil()
@@ -63,35 +92,55 @@ public class WeaponMovement : MonoBehaviour
         currentRecoilRot = Vector3.Lerp(currentRecoilRot, targetRecoilRot, snapiness * Time.deltaTime);
     }
 
-    // --- YENİ: RELOAD POZİSYONLAMA ---
-    void HandleReloadState()
+    // --- TÜM POZİSYONLARI YÖNETEN FONKSİYON ---
+    void HandlePositionAndRotation()
     {
         Vector3 targetPos = initialPosition;
         Quaternion targetRot = initialRotation;
+        float targetFov = defaultFov;
 
-        // Eğer reload yapıyorsak hedefimiz değişir
+        // 1. Durum Kontrolü (Reload > Aim > Normal)
         if (isReloading)
         {
+            // Reload pozisyonu
             targetPos += reloadPosOffset;
             targetRot *= Quaternion.Euler(reloadRotOffset);
         }
+        else if (isAiming)
+        {
+            // Nişan alma pozisyonu
+            targetPos = aimPosition; 
+            targetFov = adsFov;
+        }
 
-        // Sway + Recoil + Reload Pozisyonunu Birleştir
-        // Pozisyonu yumuşakça değiştir
-        transform.localPosition = Vector3.Lerp(transform.localPosition, targetPos + currentRecoilPos, Time.deltaTime * reloadSmooth);
+        // 2. Sway (Mouse Sallantısı) Hesabı
+        float currentSwayAmount = isAiming ? swayAmount * 0.1f : swayAmount; // Nişandayken az salla
+        float moveX = -Input.GetAxis("Mouse X") * currentSwayAmount;
+        float moveY = -Input.GetAxis("Mouse Y") * currentSwayAmount;
+        Vector3 finalSwayPos = new Vector3(moveX, moveY, 0);
+
+        // 3. Pozisyonları Birleştir ve Uygula (Smooth)
+        // Hedef = (Baz Pozisyon) + (Recoil) + (Sway)
+        transform.localPosition = Vector3.Lerp(transform.localPosition, targetPos + currentRecoilPos + finalSwayPos, Time.deltaTime * adsSpeed);
         
-        // Rotasyonu yumuşakça değiştir
-        transform.localRotation = Quaternion.Slerp(transform.localRotation, targetRot * Quaternion.Euler(currentRecoilRot), Time.deltaTime * reloadSmooth);
+        // Rotasyonu Uygula
+        transform.localRotation = Quaternion.Slerp(transform.localRotation, targetRot * Quaternion.Euler(currentRecoilRot), Time.deltaTime * adsSpeed);
+
+        // 4. Kamera Zoom (FOV)
+        if (mainCamera != null)
+        {
+            mainCamera.fieldOfView = Mathf.Lerp(mainCamera.fieldOfView, targetFov, Time.deltaTime * adsSpeed);
+        }
     }
 
     public void RecoilFire()
     {
+        // Nişan alırken tepme biraz daha az olsun mu? (Tercih meselesi, şimdilik aynı)
         float randomY = Random.Range(-recoilY, recoilY);
         targetRecoilPos += new Vector3(0, 0, recoilZ);
         targetRecoilRot += new Vector3(recoilX, randomY, 0);
     }
 
-    // --- YENİ FONKSİYONLAR (DoomGun Çağıracak) ---
     public void SetReloading(bool state)
     {
         isReloading = state;
@@ -99,8 +148,7 @@ public class WeaponMovement : MonoBehaviour
 
     public void ReloadBump()
     {
-        // Mermi girince silah hafifçe zıplasın (Recoil'in minik versiyonu)
-        targetRecoilRot += new Vector3(-5f, 0, 0); // Hafif yukarı kalkma
-        targetRecoilPos += new Vector3(0, 0, -0.05f); // Hafif geri gelme
+        targetRecoilRot += new Vector3(-5f, 0, 0); 
+        targetRecoilPos += new Vector3(0, 0, -0.05f); 
     }
 }

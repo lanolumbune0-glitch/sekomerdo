@@ -1,6 +1,7 @@
 using UnityEngine;
-using UnityEngine.UI; // UI işlemleri için şart
-using UnityEngine.SceneManagement; // Ölünce bölümü yeniden başlatmak için
+using UnityEngine.UI;
+using UnityEngine.SceneManagement;
+using System.Collections;
 
 public class PlayerHealth : MonoBehaviour
 {
@@ -9,51 +10,88 @@ public class PlayerHealth : MonoBehaviour
     private float currentHealth;
 
     [Header("UI Bağlantıları")]
-    public Text healthText;      // Ekrana yazılacak yazı
-    public Image damageOverlay;  // (Opsiyonel) Hasar alınca çıkan kanlı ekran görseli
+    public Text healthText;       // Can yazısı
+    public Image damageOverlay;   // YENİ: Kırmızı ekran görseli
+
+    [Header("Efekt Ayarları")]
+    public float overlayDuration = 0.5f; // Kırmızılık ne kadar sürede kaybolsun?
+    public float overlayIntensity = 0.4f; // Kırmızılık ne kadar koyu olsun? (0-1 arası)
 
     [Header("Sesler")]
     public AudioSource audioSource;
-    public AudioClip hurtSound; // Can yanma sesi (Ah!)
-    public AudioClip deathSound; // Ölme sesi
+    public AudioClip hurtSound;   // YENİ: Hasar alma sesi (Ah!)
+    public AudioClip deathSound;  // Ölme sesi
 
     void Start()
     {
         currentHealth = maxHealth;
         UpdateHealthUI();
+        
+        // Başlangıçta kırmızılığı tamamen gizle
+        if (damageOverlay != null)
+        {
+            damageOverlay.color = new Color(1, 0, 0, 0);
+        }
     }
 
-    // --- DÜŞMANIN ÇAĞIRDIĞI FONKSİYON ---
     public void TakeDamage(float amount)
     {
         currentHealth -= amount;
 
-        // Can yanma sesi
+        // --- YENİ: HASAR SESİ ---
         if (hurtSound != null && audioSource != null) 
+        {
+            // Ses üst üste binmesin diye pitch ile oynayabiliriz
+            audioSource.pitch = Random.Range(0.9f, 1.1f);
             audioSource.PlayOneShot(hurtSound);
+        }
 
         // UI Güncelle
         UpdateHealthUI();
 
-        // Kan Efekti (Varsa)
+        // --- YENİ: KIRMIZI EKRAN EFEKTİ ---
         if (damageOverlay != null) 
-            StartCoroutine(ShowDamageEffect());
+        {
+            StopCoroutine(FadeOverlay()); // Önceki efekt hala sürüyorsa durdur
+            StartCoroutine(FadeOverlay()); // Yenisini başlat
+        }
 
-        // Ölüm Kontrolü
         if (currentHealth <= 0)
         {
             Die();
         }
     }
 
+    // Ekranı önce kırmızı yapıp sonra yavaşça şeffaflaştıran fonksiyon
+    IEnumerator FadeOverlay()
+    {
+        // 1. Anında kırmızı yap
+        damageOverlay.color = new Color(1, 0, 0, overlayIntensity);
+
+        // 2. Yavaşça yok et
+        float timer = 0f;
+        while (timer < overlayDuration)
+        {
+            timer += Time.deltaTime;
+            // Zaman geçtikçe alpha değerini düşür
+            float newAlpha = Mathf.Lerp(overlayIntensity, 0f, timer / overlayDuration);
+            damageOverlay.color = new Color(1, 0, 0, newAlpha);
+            yield return null;
+        }
+
+        // 3. Garanti olsun diye tamamen temizle
+        damageOverlay.color = new Color(1, 0, 0, 0);
+    }
+
     void UpdateHealthUI()
     {
         if (healthText != null)
         {
-            // Canı tam sayıya yuvarla
             healthText.text = "HP: " + Mathf.Ceil(currentHealth).ToString();
             
-            // Can azaldıkça rengi soluklaşsın veya değişsin istersen buraya eklenir
+            // Can azaldıkça yazının rengini de kırmızıya çekebiliriz (Opsiyonel)
+            if (currentHealth <= 30) healthText.color = Color.red;
+            else healthText.color = Color.white; // Veya eski rengi neyse
         }
     }
 
@@ -61,19 +99,9 @@ public class PlayerHealth : MonoBehaviour
     {
         Debug.Log("ÖLDÜN!");
         
-        // Ölüm sesi
-        if (deathSound != null && audioSource != null) 
+        if (deathSound != null) 
             AudioSource.PlayClipAtPoint(deathSound, transform.position);
 
-        // Sahneyi Yeniden Başlat (Basit Ölüm)
         SceneManager.LoadScene(SceneManager.GetActiveScene().buildIndex);
-    }
-
-    // Ekranın kısa süreliğine kızarması için
-    System.Collections.IEnumerator ShowDamageEffect()
-    {
-        damageOverlay.color = new Color(1, 0, 0, 0.5f); // Yarım şeffaf kırmızı
-        yield return new WaitForSeconds(0.1f);
-        damageOverlay.color = Color.clear; // Görünmez
     }
 }
