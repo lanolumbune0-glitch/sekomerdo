@@ -57,8 +57,9 @@ public class WeaponMovement : MonoBehaviour
 
     void HandleInput()
     {
-        // Sağ tık basılıysa VE reload yapmıyorsak nişan al
-        if (Input.GetButton("Fire2") && !isReloading)
+        // ESKİSİ: if (Input.GetButton("Fire2") && !isReloading)
+        // YENİSİ: Şartı kaldırdık. Sağ tık varsa nişan moduna geçmeye çalış.
+        if (Input.GetButton("Fire2"))
         {
             isAiming = true;
         }

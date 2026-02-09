@@ -15,7 +15,7 @@ GameObject:
   - component: {fileID: 1081634907567810402}
   - component: {fileID: 3114680084129998619}
   - component: {fileID: 6484217370862644210}
-  m_Layer: 0
+  m_Layer: 8
   m_Name: Cylinder
   m_TagString: Enemy
   m_Icon: {fileID: 0}
@@ -64,13 +64,13 @@ MonoBehaviour:
   timeBetweenAttacks: 1.5
   pinkyPredict: 1
   blueRandomness: 5
+  knockbackMultiplier: 0.819
   whatIsGround:
     serializedVersion: 2
     m_Bits: 128
   whatIsPlayer:
     serializedVersion: 2
     m_Bits: 64
-  knockbackMultiplier: 0.819
 --- !u!23 &3134481018686661108
 MeshRenderer:
   m_ObjectHideFlags: 0
@@ -139,6 +139,7 @@ MonoBehaviour:
   flashColor: {r: 1, g: 0, b: 0, a: 1}
   flashDuration: 0.1
   modelRenderer: {fileID: 3134481018686661108}
+  isStunned: 0
 --- !u!136 &3114680084129998619
 CapsuleCollider:
   m_ObjectHideFlags: 0

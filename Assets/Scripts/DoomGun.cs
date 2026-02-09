@@ -72,14 +72,24 @@ public class DoomGun : MonoBehaviour
         UpdateAmmoUI();
     }
 
-    void Update()
+   void Update()
     {
+        // 1. RELOAD KESİCİ (YENİ EKLEME)
+        // Eğer Reload yaparken Ateş tuşuna (Fire1) VEYA Nişan Tuşuna (Fire2) basarsan işlemi kes
+        if ((Input.GetButton("Fire1") || Input.GetButton("Fire2")) && isReloading)
+        {
+            StopReload();
+            // Fire2 ise hemen nişan alabilmesi için weaponMovement'a da haber verelim
+            if (weaponMovement != null) weaponMovement.SetReloading(false);
+        }
+
+        // 2. ATEŞ ETME
         if (Input.GetButton("Fire1") && Time.time >= nextTimeToFire)
         {
             if (currentAmmo > 0)
             {
-                // Eğer reload yaparken ateş edersek durdur
-                if (isReloading) StopReload();
+                // StopReload yukarıda yapılıyor zaten ama garanti olsun
+                if (isReloading) StopReload(); 
                 
                 nextTimeToFire = Time.time + 1f / fireRate;
                 ShootShotgun();
@@ -90,6 +100,7 @@ public class DoomGun : MonoBehaviour
             }
         }
 
+        // 3. RELOAD BAŞLATMA
         if (Input.GetKeyDown(KeyCode.R) && currentAmmo < maxAmmo && !isReloading)
         {
             StartReload();
