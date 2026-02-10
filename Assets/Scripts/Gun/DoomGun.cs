@@ -8,25 +8,26 @@ public class DoomGun : MonoBehaviour
     public Text ammoText;        
     public CrosshairHUD crosshairScript; 
 
-    [Header("Ses Efektleri & Mikser")]
+    [Header("Ses Efektleri")]
     public AudioSource audioSource;
-    
-    [Header("Ateş & Reload Sesleri")]
     public AudioClip shootSound;
     [Range(0f, 1f)] public float shootVolume = 1f; 
     
-    public AudioClip shellInsertSound; // Mermi tek tek girme sesi
+    public AudioClip shellInsertSound;
     [Range(0f, 1f)] public float reloadVolume = 0.8f; 
 
-    [Header("Pompa (Kurma) Sesi - YENİ")]
-    public AudioClip pumpSound;      // "Şak-Şak" sesi (Pump Action)
+    public AudioClip pumpSound;
     [Range(0f, 1f)] public float pumpVolume = 1f;
-    public float pumpDelay = 0.5f;   // Ateş ettikten kaç sn sonra sesi çalsın?
+    public float pumpDelay = 0.5f;
 
-    [Header("Pompalı Şarjör Sistemi")]
-    public int maxAmmo = 8;
+    [Header("Mermi Sistemi (YENİ)")]
+    public int maxMagazineSize = 8;    // Şarjör kapasitesi (Pompalı haznesi)
+    public int currentMagazineAmmo;    // Şu an namludaki mermi
+    
+    public int maxReserveAmmo = 32;    // Cebe en fazla kaç mermi sığar?
+    public int currentReserveAmmo = 16;// Oyuna başlarken cepte kaç mermi var?
+    
     public float shellInsertTime = 0.5f;
-    private int currentAmmo;         
     private bool isReloading = false;
     private Coroutine reloadCoroutine;
 
@@ -57,7 +58,7 @@ public class DoomGun : MonoBehaviour
 
     void Start()
     {
-        currentAmmo = maxAmmo;
+        currentMagazineAmmo = maxMagazineSize; // Oyuna dolu silahla başla
         if (audioSource == null) audioSource = gameObject.AddComponent<AudioSource>();
         
         UpdateAmmoUI(); 
@@ -72,47 +73,60 @@ public class DoomGun : MonoBehaviour
         UpdateAmmoUI();
     }
 
-   void Update()
+    void Update()
     {
-        // 1. RELOAD KESİCİ (YENİ EKLEME)
-        // Eğer Reload yaparken Ateş tuşuna (Fire1) VEYA Nişan Tuşuna (Fire2) basarsan işlemi kes
+        // 1. RELOAD KESİCİ
         if ((Input.GetButton("Fire1") || Input.GetButton("Fire2")) && isReloading)
         {
             StopReload();
-            // Fire2 ise hemen nişan alabilmesi için weaponMovement'a da haber verelim
-            if (weaponMovement != null) weaponMovement.SetReloading(false);
         }
 
         // 2. ATEŞ ETME
         if (Input.GetButton("Fire1") && Time.time >= nextTimeToFire)
         {
-            if (currentAmmo > 0)
+            // Şarjörde mermi varsa sık
+            if (currentMagazineAmmo > 0)
             {
-                // StopReload yukarıda yapılıyor zaten ama garanti olsun
-                if (isReloading) StopReload(); 
-                
+                if (isReloading) StopReload();
                 nextTimeToFire = Time.time + 1f / fireRate;
                 ShootShotgun();
             }
-            else if (!isReloading)
+            // Şarjör boş ama cepte mermi varsa reload yap
+            else if (!isReloading && currentReserveAmmo > 0)
             {
                 StartReload();
             }
         }
 
         // 3. RELOAD BAŞLATMA
-        if (Input.GetKeyDown(KeyCode.R) && currentAmmo < maxAmmo && !isReloading)
+        // Şarjör tam dolu değilse VE cepte mermi varsa reload yapabiliriz
+        if (Input.GetKeyDown(KeyCode.R) && currentMagazineAmmo < maxMagazineSize && currentReserveAmmo > 0 && !isReloading)
         {
             StartReload();
         }
     }
 
+    // --- YENİ UI GÜNCELLEME ---
     void UpdateAmmoUI()
     {
         if (ammoText != null)
         {
-            ammoText.text = currentAmmo + " / " + maxAmmo;
+            // Ekranda "Şarjör / Cep" şeklinde yazar (Örn: 5 / 20)
+            ammoText.text = currentMagazineAmmo + " / " + currentReserveAmmo;
         }
+    }
+
+    // --- YENİ MERMİ TOPLAMA FONKSİYONU ---
+    public void AddAmmo(int amount)
+    {
+        // Mermiyi cebe ekle
+        currentReserveAmmo += amount;
+        
+        // Cebi taşırma (Maksimum kapasite)
+        if (currentReserveAmmo > maxReserveAmmo) currentReserveAmmo = maxReserveAmmo;
+
+        Debug.Log("Mermi Alındı! Cepte: " + currentReserveAmmo);
+        UpdateAmmoUI();
     }
 
     void StartReload()
@@ -127,9 +141,6 @@ public class DoomGun : MonoBehaviour
         if (weaponMovement != null) weaponMovement.SetReloading(false);
         if (crosshairScript != null) crosshairScript.HideReloadRing();
         UpdateAmmoUI();
-        
-        // Reload yarıda kesilirse pompa sesini iptal et (İsteğe bağlı)
-        // CancelInvoke(nameof(PlayPumpSound)); 
     }
 
     IEnumerator ReloadSequence()
@@ -137,7 +148,8 @@ public class DoomGun : MonoBehaviour
         isReloading = true;
         if (weaponMovement != null) weaponMovement.SetReloading(true);
 
-        while (currentAmmo < maxAmmo)
+        // Döngü Şartı: Şarjör dolana kadar VE cepte mermi bitene kadar
+        while (currentMagazineAmmo < maxMagazineSize && currentReserveAmmo > 0)
         {
             float timer = 0f;
             while (timer < shellInsertTime)
@@ -148,7 +160,9 @@ public class DoomGun : MonoBehaviour
                 yield return null;
             }
 
-            currentAmmo++;
+            // --- YENİ MANTIK: CEPTEN AL ŞARJÖRE KOY ---
+            currentReserveAmmo--; // Cepten 1 düş
+            currentMagazineAmmo++; // Şarjöre 1 ekle
             UpdateAmmoUI(); 
 
             if (shellInsertSound != null && audioSource != null)
@@ -160,10 +174,8 @@ public class DoomGun : MonoBehaviour
             if (weaponMovement != null) weaponMovement.ReloadBump();
         }
 
-        // --- YENİ KISIM: RELOAD TAMAMLANIRSA POMPA SESİ ---
-        // Buraya geldiysek reload hiç kesilmemiş demektir.
+        // Reload bitince pompa sesi
         PlayPumpSound();
-        // --------------------------------------------------
 
         isReloading = false;
         if (weaponMovement != null) weaponMovement.SetReloading(false);
@@ -172,47 +184,42 @@ public class DoomGun : MonoBehaviour
 
     void ShootShotgun()
     {
-        currentAmmo--;
+        currentMagazineAmmo--; // Şarjörden düş
         UpdateAmmoUI(); 
+        if (CameraShake.Instance != null) 
+            CameraShake.Instance.Shake(0.08f, 0.08f);
+        // ------------------------------------------
 
-        // Ateş Sesi
         if (shootSound != null && audioSource != null)
         {
             audioSource.pitch = Random.Range(0.9f, 1.1f);
             audioSource.PlayOneShot(shootSound, shootVolume);
         }
 
-        // --- YENİ KISIM: ATEŞ SONRASI POMPA SESİ ---
-        // Belirlenen süre (pumpDelay) kadar bekle ve sesi çal
         Invoke(nameof(PlayPumpSound), pumpDelay);
-        // -------------------------------------------
 
         if (weaponMovement != null) weaponMovement.RecoilFire();
         if (muzzleFlash != null) muzzleFlash.Play();
 
-        Vector3 eyePosition = fpsCamera.transform.position;
-        Vector3 visualStartPoint = (attackPoint != null) ? attackPoint.position : eyePosition;
+        // SPHERECAST (Kalın Mermi - Fixlenmiş Hali)
+        Vector3 rayOrigin = fpsCamera.transform.position - (fpsCamera.transform.forward * 0.5f); 
 
         for (int i = 0; i < pellets; i++)
         {
             Vector3 deviation = Random.insideUnitCircle * spreadAngle;
             Quaternion rot = Quaternion.LookRotation(fpsCamera.transform.forward);
             Vector3 shotDirection = rot * Quaternion.Euler(deviation.x, deviation.y, 0) * Vector3.forward;
-            Vector3 endPoint = eyePosition + (shotDirection * range);
 
             RaycastHit hit;
-            if (Physics.Raycast(eyePosition, shotDirection, out hit, range, vurulabilirKatmanlar))
+            // 0.1f kalınlığında mermi
+            if (Physics.SphereCast(rayOrigin, 0.1f, shotDirection, out hit, range, vurulabilirKatmanlar))
             {
-                endPoint = hit.point;
-                float distanceRatio = hit.distance / range;
-                float currentDamage = Mathf.Lerp(closeDamage, farDamage, distanceRatio);
-                float currentForce = Mathf.Lerp(closeKnockback, farKnockback, distanceRatio);
-
+                // Hasar kodları aynen
                 Target target = hit.transform.GetComponent<Target>();
-                if (target != null) target.TakeDamage(currentDamage);
+                if (target != null) target.TakeDamage(closeDamage); // Basitlik için yakın hasarını aldım
 
                 SmartEnemy enemyAI = hit.transform.GetComponent<SmartEnemy>();
-                if (enemyAI != null) enemyAI.AddKnockback(shotDirection, currentForce);
+                if (enemyAI != null) enemyAI.AddKnockback(shotDirection, closeKnockback);
 
                 if (impactEffect != null)
                 {
@@ -227,22 +234,19 @@ public class DoomGun : MonoBehaviour
                 LineRenderer lr = trail.GetComponent<LineRenderer>();
                 if (lr != null)
                 {
-                    lr.SetPosition(0, visualStartPoint); 
-                    lr.SetPosition(1, endPoint);
+                    lr.SetPosition(0, attackPoint.position); 
+                    lr.SetPosition(1, hit.point != Vector3.zero ? hit.point : rayOrigin + shotDirection * range);
                 }
             }
         }
     }
 
-    // --- YENİ FONKSİYON: POMPA SESİNİ ÇAL ---
     void PlayPumpSound()
     {
         if (pumpSound != null && audioSource != null)
         {
-            audioSource.pitch = Random.Range(0.95f, 1.05f); // Robotik olmasın diye hafif ton değişimi
+            audioSource.pitch = Random.Range(0.95f, 1.05f);
             audioSource.PlayOneShot(pumpSound, pumpVolume);
-            
-            // İstersen burada silahı tekrar hafifçe zıplatabilirsin:
             if (weaponMovement != null) weaponMovement.ReloadBump(); 
         }
     }
