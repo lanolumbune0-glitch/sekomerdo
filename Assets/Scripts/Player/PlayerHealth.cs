@@ -37,7 +37,8 @@ public class PlayerHealth : MonoBehaviour
     public void TakeDamage(float amount)
     {
         currentHealth -= amount;
-
+if (CameraShake.Instance != null) 
+            CameraShake.Instance.Shake(0.2f, 0.2f);
         // --- YENİ: HASAR SESİ ---
         if (hurtSound != null && audioSource != null) 
         {
@@ -103,5 +104,20 @@ public class PlayerHealth : MonoBehaviour
             AudioSource.PlayClipAtPoint(deathSound, transform.position);
 
         SceneManager.LoadScene(SceneManager.GetActiveScene().buildIndex);
+    }
+
+    public void Heal(float amount)
+    {
+        currentHealth += amount;
+        
+        // Canımız 100'ü geçmesin
+        if (currentHealth > maxHealth) currentHealth = maxHealth;
+
+        // Ekrandaki yazıyı güncelle
+        UpdateHealthUI();
+        
+        // Kırmızılık varsa temizle
+        if (damageOverlay != null) 
+            damageOverlay.color = Color.clear;
     }
 }
