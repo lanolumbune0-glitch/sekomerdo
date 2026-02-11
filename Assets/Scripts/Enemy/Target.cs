@@ -8,7 +8,7 @@ public class Target : MonoBehaviour
     public float health = 100f;
     private float maxHealth;
 
-    // Pompalı tüfek ve patlama koruması
+    // --- EKSİK OLAN DEĞİŞKENLER BURADA ---
     private bool hasExploded = false; 
 
     [Header("Ölümsüzlük (Nemesis) Modu")]
@@ -49,7 +49,7 @@ public class Target : MonoBehaviour
     {
         if (isStunned || hasExploded) return;
 
-        // Hasar alınca oyuncuya dön (Uyandırma servisi)
+        // Hasar alınca oyuncuya dön
         SmartEnemy ai = GetComponent<SmartEnemy>();
         if (ai != null)
         {
@@ -109,7 +109,6 @@ public class Target : MonoBehaviour
             }
         }
 
-        // Kamera Sarsıntısı
         if (Camera.main != null && CameraShake.Instance != null)
         {
             float distance = Vector3.Distance(transform.position, Camera.main.transform.position);
