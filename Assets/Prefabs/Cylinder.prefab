@@ -57,20 +57,27 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: f9f27bd19f07eec44b9055878ae2f0de, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::SmartEnemy
-  enemyType: 1
+  enemyType: 0
   sightRange: 150
   attackRange: 2.5
   damage: 10
   timeBetweenAttacks: 1.5
+  proximityRange: 20
+  viewAngle: 90
   pinkyPredict: 1
   blueRandomness: 5
-  knockbackMultiplier: 0.819
-  whatIsGround:
-    serializedVersion: 2
-    m_Bits: 128
+  stuckCheckInterval: 0.5
+  patrolSpeed: 3.5
+  chaseSpeed: 6
+  agentAcceleration: 25
+  agentAngularSpeed: 360
+  knockbackResistance: 0.416
   whatIsPlayer:
     serializedVersion: 2
     m_Bits: 64
+  whatIsObstacle:
+    serializedVersion: 2
+    m_Bits: 128
 --- !u!23 &3134481018686661108
 MeshRenderer:
   m_ObjectHideFlags: 0
@@ -136,10 +143,16 @@ MonoBehaviour:
   isInvincible: 0
   stunDuration: 5
   stunColor: {r: 0, g: 0, b: 1, a: 1}
+  isExplosive: 0
+  destroyedVersion: {fileID: 0}
+  areaDamage: 80
+  explosionRadius: 10
+  explosionForce: 700
+  explosionEffect: {fileID: 0}
+  explosionSound: {fileID: 0}
   flashColor: {r: 1, g: 0, b: 0, a: 1}
   flashDuration: 0.1
   modelRenderer: {fileID: 3134481018686661108}
-  isStunned: 0
 --- !u!136 &3114680084129998619
 CapsuleCollider:
   m_ObjectHideFlags: 0
@@ -172,14 +185,14 @@ NavMeshAgent:
   m_GameObject: {fileID: 6238381287525682082}
   m_Enabled: 1
   m_AgentTypeID: 0
-  m_Radius: 3.5
+  m_Radius: 3
   m_Speed: 10
-  m_Acceleration: 8
+  m_Acceleration: 30
   avoidancePriority: 50
-  m_AngularSpeed: 120
+  m_AngularSpeed: 360
   m_StoppingDistance: 0
   m_AutoTraverseOffMeshLink: 1
-  m_AutoBraking: 1
+  m_AutoBraking: 0
   m_AutoRepath: 1
   m_Height: 2
   m_BaseOffset: 1

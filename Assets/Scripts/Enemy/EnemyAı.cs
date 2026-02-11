@@ -1,200 +1,286 @@
 using UnityEngine;
 using UnityEngine.AI;
+using System.Collections;
 
-// Düşman Kişilikleri
-public enum EnemyType 
-{ 
-    Red_Blinky,   // Agresif
-    Pink_Pinky,   // Taktiksel
-    Blue_Inky     // Rastgele
-}
+public enum EnemyType { Red_Blinky, Pink_Pinky, Blue_Inky }
 
+[RequireComponent(typeof(NavMeshAgent))]
+[RequireComponent(typeof(Target))]
 public class SmartEnemy : MonoBehaviour
 {
     [Header("Düşman Kimliği")]
     public EnemyType enemyType = EnemyType.Red_Blinky;
 
-    [Header("Temel Zeka Ayarları")]
-    public float sightRange = 20f;
-    public float attackRange = 2.5f;
-    public float damage = 10f;            // Vuruş Gücü
-    public float timeBetweenAttacks = 1.5f; 
+    [Header("Savaş Ayarları")]
+    public float sightRange = 20f;        // Ne kadar uzağı görebilir?
+    public float attackRange = 2.5f;      // Saldırı mesafesi
+    public float damage = 10f;            // Hasar
+    public float timeBetweenAttacks = 1.5f;
 
-    [Header("Kişilik Ayarları")]
-    public float pinkyPredict = 5f;
-    public float blueRandomness = 8f;
-
-    [Header("Fizik Ayarları")]
-    [Range(0f, 1f)] public float knockbackMultiplier = 1f; // 1 = Normal, 0.1 = Tank
-
-    [Header("Referanslar")]
-    public LayerMask whatIsGround;
-    public LayerMask whatIsPlayer;
+    [Header("--- GELİŞMİŞ DUYU AYARLARI (YENİ) ---")]
+    [Tooltip("Düşman bu mesafedeki oyuncuyu arkası dönük olsa bile hisseder (Altıncı His).")]
+    public float proximityRange = 8f;     // Eskiden 8f idi, şimdi buradan ayarla
     
-    // Sistem Değişkenleri
+    [Tooltip("Düşmanın görüş açısı (90 = Önündeki 180 dereceyi görür).")]
+    public float viewAngle = 90f;         // Eskiden 90f idi (Geniş Görüş)
+
+    [Header("Kişilik & Zeka")]
+    public float pinkyPredict = 5f;       // Tahmin süresi
+    public float blueRandomness = 8f;     // Rastgelelik
+    public float stuckCheckInterval = 0.5f; // Sıkışma kontrolü
+
+    [Header("Hareket Hızları")]
+    public float patrolSpeed = 3.5f;
+    public float chaseSpeed = 6f;
+
+    [Header("--- NAVMESH AYARLARI (YENİ) ---")]
+    [Tooltip("Düşmanın hızlanma ivmesi. Yüksek olursa 'zınk' diye durur kalkar.")]
+    public float agentAcceleration = 25f; // Eskiden kodda 25f sabitti
+    
+    [Tooltip("Dönüş hızı. 360 idealdir.")]
+    public float agentAngularSpeed = 360f; // Eskiden kodda 360f sabitti
+
+    [Header("Fizik & Hareket")]
+    [Range(0f, 1f)] public float knockbackResistance = 0.5f; // 0 = Uçar, 1 = Kıpırdamaz
+    
+    [Header("Referanslar")]
+    public LayerMask whatIsPlayer;
+    public LayerMask whatIsObstacle;
+
+    // Sistem Bileşenleri
     private NavMeshAgent agent;
     private Transform player;
-    private Target myStats; 
-    
-    // YENİ: Oyuncunun can scriptine ulaşmamız lazım
-    private PlayerHealth playerHealthScript; 
+    private PlayerHealth playerHealthScript;
+    private Animator anim;
 
-    // Değişkenler
-    private Vector3 impactVelocity = Vector3.zero;
+    // Durumlar
     private bool isStunned = false;
-    private bool playerInSight;
-    private bool playerInAttackRange;
-    private bool alreadyAttacked;
+    private bool isAttacking = false;
+    private Vector3 impactVelocity;
+    
+    // Devriye
     private Vector3 walkPoint;
     private bool walkPointSet;
     
+    // Sıkışma Kontrolü
+    private float stuckTimer;
+    private Vector3 lastPosition;
+
     private void Awake()
     {
         agent = GetComponent<NavMeshAgent>();
+        anim = GetComponent<Animator>();
         
-        // Oyuncuyu bul
-        GameObject playerObj = GameObject.Find("Player");
+        // --- AYARLARI ARTIK EDİTÖRDEN ALIYORUZ ---
+        agent.stoppingDistance = attackRange - 0.5f; 
+        agent.autoBraking = false; 
+        
+        // Editörden girdiğin değerleri NavMesh'e uygula
+        agent.acceleration = agentAcceleration;
+        agent.angularSpeed = agentAngularSpeed;
+        
+        GameObject playerObj = GameObject.FindGameObjectWithTag("Player");
         if (playerObj != null)
         {
             player = playerObj.transform;
-            // YENİ: Oyuncunun üzerindeki Can scriptini al
             playerHealthScript = playerObj.GetComponent<PlayerHealth>();
         }
-        
-        myStats = GetComponent<Target>(); 
+
+        lastPosition = transform.position;
     }
 
     private void Update()
     {
-        if (isStunned) return;
+        if (isStunned || player == null) return;
 
-        // Geri Tepme
+        // Knockback (Fizik)
         if (impactVelocity.magnitude > 0.2f)
         {
             agent.Move(impactVelocity * Time.deltaTime);
             impactVelocity = Vector3.Lerp(impactVelocity, Vector3.zero, 5f * Time.deltaTime);
         }
 
-        if (player == null) return;
+        // Zeka
+        float distanceToPlayer = Vector3.Distance(transform.position, player.position);
+        
+        bool playerInSight = CheckSight(distanceToPlayer);
+        bool playerInAttackRange = distanceToPlayer <= attackRange;
 
-        // Görüş Kontrolleri
-        playerInSight = CanSeePlayer();
-        playerInAttackRange = Physics.CheckSphere(transform.position, attackRange, whatIsPlayer);
-
-        // Durum Makinesi
         if (playerInSight && playerInAttackRange)
         {
-            Attacking();
+            AttackState();
         }
         else if (playerInSight)
         {
-            Chasing();
+            ChaseState();
         }
         else
         {
-            Patroling();
+            PatrolState();
         }
+
+        if(anim != null) anim.SetFloat("Speed", agent.velocity.magnitude);
     }
 
-    // --- DURUM 1: KOVALAMA ---
-    private void Chasing()
+    // --- DEĞİŞKENLİ GÖRÜŞ FONKSİYONU ---
+    bool CheckSight(float dist)
     {
+        // 1. KURAL: HİSSETME (Editörden ayarlanabilir: proximityRange)
+        if (dist < proximityRange) return true;
+
+        // 2. KURAL: GÖRME
+        if (dist < sightRange)
+        {
+            Vector3 targetPos = player.position + Vector3.up * 1.5f;
+            Vector3 eyePos = transform.position + Vector3.up * 1.5f;
+            Vector3 direction = (targetPos - eyePos).normalized;
+
+            // Görüş Açısı (Editörden ayarlanabilir: viewAngle)
+            if (Vector3.Angle(transform.forward, direction) < viewAngle)
+            {
+                RaycastHit hit;
+                if (Physics.Raycast(eyePos, direction, out hit, sightRange))
+                {
+                    if (hit.transform == player || hit.transform.CompareTag("Player"))
+                    {
+                        return true; 
+                    }
+                }
+            }
+        }
+        return false;
+    }
+
+    void ChaseState()
+    {
+        if (isAttacking) return;
+        
+        // Eski rotayı unut, yeni hedefe kilitlen
+        if (agent.hasPath && agent.destination != player.position)
+        {
+            agent.ResetPath();
+        }
+
+        agent.speed = chaseSpeed;
+        agent.isStopped = false;
+        lastPosition = transform.position;
+
         switch (enemyType)
         {
             case EnemyType.Red_Blinky:
-                agent.SetDestination(player.position);
+                SetDestinationSmart(player.position);
                 break;
 
             case EnemyType.Pink_Pinky:
-                Vector3 interceptPoint = player.position + (player.forward * pinkyPredict);
-                NavMeshHit hit;
-                if (NavMesh.SamplePosition(interceptPoint, out hit, 5f, NavMesh.AllAreas))
-                    agent.SetDestination(hit.position);
-                else
-                    agent.SetDestination(player.position);
+                Vector3 targetPos = player.position + (player.forward * pinkyPredict);
+                SetDestinationSmart(targetPos);
                 break;
 
             case EnemyType.Blue_Inky:
                 if (!agent.pathPending && agent.remainingDistance < 2f)
                 {
-                    Vector3 randomPoint = Random.insideUnitSphere * blueRandomness;
-                    agent.SetDestination(player.position + randomPoint);
+                    Vector3 randomDir = Random.insideUnitSphere * blueRandomness;
+                    randomDir += player.position;
+                    SetDestinationSmart(randomDir);
                 }
                 break;
         }
     }
 
-    // --- DURUM 2: SALDIRI ---
-    private void Attacking()
+    void AttackState()
     {
-        agent.SetDestination(transform.position); 
-        transform.LookAt(player);
+        agent.isStopped = true;
+        
+        Vector3 direction = (player.position - transform.position).normalized;
+        direction.y = 0;
+        Quaternion lookRot = Quaternion.LookRotation(direction);
+        transform.rotation = Quaternion.Slerp(transform.rotation, lookRot, Time.deltaTime * 10f);
 
-        if (!alreadyAttacked)
+        if (!isAttacking) StartCoroutine(AttackRoutine());
+    }
+
+    IEnumerator AttackRoutine()
+    {
+        isAttacking = true;
+        if(anim != null) anim.SetTrigger("Attack");
+
+        yield return new WaitForSeconds(0.4f);
+
+        if (Vector3.Distance(transform.position, player.position) <= attackRange + 1f)
         {
-            // YENİ: HASAR VERME KODU BURASI
-            if (playerHealthScript != null)
-            {
-                playerHealthScript.TakeDamage(damage);
-                Debug.Log(enemyType + " oyuncuya " + damage + " hasar verdi!");
-            }
-
-            alreadyAttacked = true;
-            Invoke(nameof(ResetAttack), timeBetweenAttacks);
+            if (playerHealthScript != null) playerHealthScript.TakeDamage(damage);
         }
+
+        yield return new WaitForSeconds(timeBetweenAttacks - 0.4f);
+        isAttacking = false;
     }
 
-    private void ResetAttack()
+    void PatrolState()
     {
-        alreadyAttacked = false;
-    }
+        agent.speed = patrolSpeed;
+        agent.isStopped = false;
 
-    // --- DURUM 3: DEVRİYE ---
-    private void Patroling()
-    {
         if (!walkPointSet) SearchWalkPoint();
         if (walkPointSet) agent.SetDestination(walkPoint);
 
-        if (Vector3.Distance(transform.position, walkPoint) < 1f)
+        if ((transform.position - walkPoint).magnitude < 2f)
             walkPointSet = false;
+
+        // Sıkışma Kontrolü
+        stuckTimer += Time.deltaTime;
+        if (stuckTimer > stuckCheckInterval)
+        {
+            if (Vector3.Distance(transform.position, lastPosition) < 0.1f)
+            {
+                walkPointSet = false; 
+            }
+            lastPosition = transform.position;
+            stuckTimer = 0;
+        }
     }
 
-    private void SearchWalkPoint()
+    void SearchWalkPoint()
     {
         float range = 15f;
-        float randomZ = Random.Range(-range, range);
-        float randomX = Random.Range(-range, range);
-
-        walkPoint = new Vector3(transform.position.x + randomX, transform.position.y, transform.position.z + randomZ);
-
-        if (Physics.Raycast(walkPoint, -transform.up, 2f, whatIsGround))
+        Vector3 randomPoint = transform.position + Random.insideUnitSphere * range;
+        NavMeshHit hit;
+        if (NavMesh.SamplePosition(randomPoint, out hit, 4f, NavMesh.AllAreas))
+        {
+            walkPoint = hit.position;
             walkPointSet = true;
+        }
+    }
+
+    void SetDestinationSmart(Vector3 target)
+    {
+        NavMeshHit hit;
+        if (NavMesh.SamplePosition(target, out hit, 2f, NavMesh.AllAreas))
+        {
+            agent.SetDestination(hit.position);
+        }
+        else
+        {
+            agent.SetDestination(player.position);
+        }
     }
 
     public void AddKnockback(Vector3 direction, float force)
     {
-        direction.Normalize();
-        if (direction.y < 0) direction.y = -direction.y;
-        impactVelocity += direction * (force * knockbackMultiplier);
+        direction.y = 0; 
+        float finalForce = force * (1f - knockbackResistance); 
+        impactVelocity += direction.normalized * finalForce;
     }
 
     public void SetStunnedState(bool state)
     {
         isStunned = state;
-        if (isStunned)
-        {
-            agent.isStopped = true;
-            agent.velocity = Vector3.zero;
-        }
-        else
-        {
-            if(agent.isActiveAndEnabled) agent.isStopped = false;
-        }
+        agent.isStopped = state;
+        if(anim != null) anim.SetBool("IsStunned", state);
     }
 
     public void HearSound(Vector3 soundPos)
     {
-        if (agent != null && agent.isActiveAndEnabled && agent.isOnNavMesh && !isStunned) 
+        if (!isStunned)
         {
             walkPoint = soundPos;
             walkPointSet = true;
@@ -202,29 +288,16 @@ public class SmartEnemy : MonoBehaviour
         }
     }
 
-    bool CanSeePlayer()
-    {
-        if (Vector3.Distance(transform.position, player.position) < sightRange)
-        {
-            Vector3 dirToPlayer = (player.position - transform.position).normalized;
-            if (Vector3.Angle(transform.forward, dirToPlayer) < 110f)
-            {
-                RaycastHit hit;
-                // Layer mask kullanmıyoruz ki her şeye çarpsın, eğer Player'a çarparsa görsün
-                if (Physics.Raycast(transform.position, dirToPlayer, out hit, sightRange))
-                {
-                    if (hit.transform == player) return true;
-                }
-            }
-        }
-        return false;
-    }
-
     private void OnDrawGizmosSelected()
     {
         Gizmos.color = Color.yellow;
         Gizmos.DrawWireSphere(transform.position, sightRange);
+        
         Gizmos.color = Color.red;
         Gizmos.DrawWireSphere(transform.position, attackRange);
+        
+        // Görüş Açısını ve Hissiyat Mesafesini Görselleştir
+        Gizmos.color = Color.blue;
+        Gizmos.DrawWireSphere(transform.position, proximityRange); // Altıncı his alanı
     }
 }

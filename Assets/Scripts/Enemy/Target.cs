@@ -8,9 +8,8 @@ public class Target : MonoBehaviour
     public float health = 100f;
     private float maxHealth;
 
-    // --- BU DEĞİŞKEN YENİ EKLENDİ ---
-    private bool hasExploded = false; // "Patladım mı?" kontrolü
-    // --------------------------------
+    // Pompalı tüfek ve patlama koruması
+    private bool hasExploded = false; 
 
     [Header("Ölümsüzlük (Nemesis) Modu")]
     public bool isInvincible = false;
@@ -20,8 +19,8 @@ public class Target : MonoBehaviour
 
     [Header("--- PATLAYICI VARİL MODU ---")]
     public bool isExplosive = false;
-    public GameObject destroyedVersion;
-    public float areaDamage = 80f;
+    public GameObject destroyedVersion; // EKSİK OLAN BUYDU
+    public float areaDamage = 80f;      // EKSİK OLAN BUYDU
     public float explosionRadius = 10f;
     public float explosionForce = 700f;
     public GameObject explosionEffect;
@@ -48,8 +47,15 @@ public class Target : MonoBehaviour
 
     public void TakeDamage(float amount)
     {
-        // Eğer zaten patladıysak veya baygınsak daha fazla hasar alma
         if (isStunned || hasExploded) return;
+
+        // Hasar alınca oyuncuya dön (Uyandırma servisi)
+        SmartEnemy ai = GetComponent<SmartEnemy>();
+        if (ai != null)
+        {
+            GameObject player = GameObject.FindGameObjectWithTag("Player");
+            if(player != null) transform.LookAt(new Vector3(player.transform.position.x, transform.position.y, player.transform.position.z));
+        }
 
         health -= amount;
 
@@ -59,11 +65,7 @@ public class Target : MonoBehaviour
         {
             if (isExplosive)
             {
-                // BURASI ÇOK ÖNEMLİ: Sadece patlamadıysa patlat!
-                if (!hasExploded) 
-                {
-                    Explode();
-                }
+                if (!hasExploded) Explode();
             }
             else if (isInvincible)
             {
@@ -78,19 +80,14 @@ public class Target : MonoBehaviour
 
     void Explode()
     {
-        // 1. Bayrağı dik: "Ben artık patladım, bir daha bu fonksiyonu çağırma!"
         hasExploded = true;
 
-        // Kırık versiyonu yarat
         if (destroyedVersion != null) Instantiate(destroyedVersion, transform.position, transform.rotation);
-
-        // Efekt ve Ses
         if (explosionEffect != null) Instantiate(explosionEffect, transform.position, Quaternion.identity);
         if (explosionSound != null) AudioSource.PlayClipAtPoint(explosionSound, transform.position);
 
-        // Hasar Alanı
         Collider[] colliders = Physics.OverlapSphere(transform.position, explosionRadius);
-        List<GameObject> damagedObjects = new List<GameObject>();
+        List<GameObject> damagedObjects = new List<GameObject>(); 
 
         foreach (Collider nearbyObject in colliders)
         {
@@ -112,7 +109,7 @@ public class Target : MonoBehaviour
             }
         }
 
-        // Sarsıntı
+        // Kamera Sarsıntısı
         if (Camera.main != null && CameraShake.Instance != null)
         {
             float distance = Vector3.Distance(transform.position, Camera.main.transform.position);
@@ -126,19 +123,22 @@ public class Target : MonoBehaviour
         Destroy(gameObject);
     }
 
-    // ... (Diğer fonksiyonlar StunRoutine, FlashRoutine aynı kalıyor) ...
     IEnumerator StunRoutine()
     {
         if (isStunned) yield break; 
         isStunned = true; 
         health = 0; 
+        
         SmartEnemy ai = GetComponent<SmartEnemy>();
-        if (ai != null) ai.enabled = false; 
+        if (ai != null) ai.SetStunnedState(true);
+
         if (modelRenderer != null) modelRenderer.material.color = stunColor;
+
         yield return new WaitForSeconds(stunDuration);
+
         health = maxHealth;
         if (modelRenderer != null) modelRenderer.material.color = originalColor;
-        if (ai != null) ai.enabled = true; 
+        if (ai != null) ai.SetStunnedState(false);
         isStunned = false; 
     }
 
