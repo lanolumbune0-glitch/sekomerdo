@@ -19,8 +19,8 @@ public class Target : MonoBehaviour
 
     [Header("--- PATLAYICI VARİL MODU ---")]
     public bool isExplosive = false;
-    public GameObject destroyedVersion; // EKSİK OLAN BUYDU
-    public float areaDamage = 80f;      // EKSİK OLAN BUYDU
+    public GameObject destroyedVersion; // HATA VEREN KISIM BUYDU, EKLEDİM
+    public float areaDamage = 80f;      // HATA VEREN KISIM BUYDU, EKLEDİM
     public float explosionRadius = 10f;
     public float explosionForce = 700f;
     public GameObject explosionEffect;
